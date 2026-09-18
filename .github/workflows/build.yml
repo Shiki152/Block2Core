@@ -1,0 +1,52 @@
+name: Build Block2Core
+
+on:
+  push:
+    branches: [ "**" ]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout du code
+        uses: actions/checkout@v4
+
+      - name: Installer Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - name: Trouver et decompresser le zip du projet
+        run: |
+          ZIP_FILE=$(find . -maxdepth 2 -iname "*.zip" | head -n 1)
+          if [ -z "$ZIP_FILE" ]; then
+            echo "::error::Aucun fichier .zip trouve a la racine du depot."
+            exit 1
+          fi
+          echo "Zip trouve : $ZIP_FILE"
+          mkdir -p extracted
+          unzip -q "$ZIP_FILE" -d extracted
+
+          POM_PATH=$(find extracted -maxdepth 6 -iname "pom.xml" | head -n 1)
+          if [ -z "$POM_PATH" ]; then
+            echo "::error::Aucun pom.xml trouve apres decompression du zip."
+            exit 1
+          fi
+          POM_DIR=$(dirname "$POM_PATH")
+          echo "Projet trouve dans : $POM_DIR"
+          echo "POM_DIR=$POM_DIR" >> "$GITHUB_ENV"
+
+      - name: Build avec Maven
+        working-directory: ${{ env.POM_DIR }}
+        run: mvn -B clean package
+
+      - name: Upload du jar compile
+        uses: actions/upload-artifact@v4
+        with:
+          name: Block2Core-jar
+          path: ${{ env.POM_DIR }}/target/Block2Core-*.jar
+          if-no-files-found: error
